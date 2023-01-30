@@ -3,6 +3,7 @@ import { PrismaClient } from "@prisma/client";
 import middlewareValidator from "./src/middleware/validator/validator.js";
 import schema from "./src/middleware/validator/schema.js";
 import cors from "cors";
+import * as bcrypt from "bcrypt";
 
 const prisma = new PrismaClient();
 const app = express();
@@ -14,10 +15,15 @@ app.post("/signup", schema, middlewareValidator, async (req, res) => {
   try {
     res.status(200);
     res.header("Content-Type", "application/json");
+    const { email, password } = req.body;
+    const salt = await bcrypt.genSalt();
+    const hashedPassword = await bcrypt.hash(password, salt);
     const newUser = await prisma.users.create({
-      data: req.body,
+      data: {
+        email: email,
+        password: hashedPassword,
+      },
     });
-    console.log(newUser);
 
     res.send(JSON.stringify({ message: "Utente creato" }));
   } catch (error) {
@@ -35,8 +41,8 @@ app.post("/login", async (req, res) => {
 
   if (!user) return res.status(401).json({ error: "Nessun utente trovato" });
 
-  if (password !== user.password)
-    return res.status(401).json({ error: "Password non valida" });
+  const isValid = await bcrypt.compare(password, user.password);
+  if (!isValid) return res.status(401).json({ error: "Password non valida" });
 
   res.json({ message: "Login effettuato con successo", user });
 });
